@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>下载确认弹框测试</title>
+</head>
+<body>
+<pre id="result">pending</pre>
+<iframe id="app" src="../index.html" style="display:none"></iframe>
+<script>
+  var lines = [], failed = false;
+  function ok(c, m) { lines.push((c ? 'PASS ' : 'FAIL ') + m); if (!c) failed = true; }
+  function finish() {
+    document.title = failed ? 'FAIL' : 'PASS';
+    document.getElementById('result').textContent = 'TITLE=' + (failed ? 'FAIL' : 'PASS') + '\n' + lines.join('\n');
+  }
+  var frame = document.getElementById('app');
+  var started = false;
+  function start() { if (started) return; started = true; setTimeout(run, 600); }
+  frame.addEventListener('load', start);
+  setTimeout(start, 8000); // 兜底
+
+  function run() {
+    var win = frame.contentWindow, doc = win.document;
+    try {
+      var e = win.__qrExports;
+      if (!e || typeof e.showDownloadConfirm !== 'function') { lines.push('FATAL app.js 未加载 showDownloadConfirm'); failed = true; finish(); return; }
+
+      // 强制走“默认下载目录”回退路径（headless 下无法弹出系统另存为）
+      win.showSaveFilePicker = undefined;
+      // 拦截下载链接点击：真实下载会在 headless 中挂起，这里仅记录次数
+      var dlClicks = 0;
+      win.HTMLAnchorElement.prototype.click = function () {
+        if (this.hasAttribute('download')) dlClicks++;
+      };
+
+      var dlModal = doc.getElementById('dlModal');
+      var blob = new Blob(['fake xlsx content'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+      // 1. 生成完成后弹出确认框，展示文件名 / 保存位置 / 统计，并锁定背景滚动
+      e.showDownloadConfirm({ name: '名单_二维码.xlsx', blob: blob, count: 6, skipped: 1 });
+      ok(!dlModal.classList.contains('hidden'), '生成完成后弹出下载确认框');
+      ok(doc.getElementById('dlFileName').textContent === '名单_二维码.xlsx', '弹框显示文件名');
+      ok(/6 个二维码/.test(doc.getElementById('dlStats').textContent) && /1 个/.test(doc.getElementById('dlStats').textContent),
+        '弹框显示生成统计（6 个，跳过空行 1 个）');
+      ok(doc.getElementById('dlLocation').textContent === '点击「下载文件」按钮，用户自定义存放文件位置',
+        '保存位置文案正确（' + doc.getElementById('dlLocation').textContent + '）');
+      ok(doc.body.classList.contains('modal-open'), '弹框打开时背景滚动被锁定');
+      ok(doc.querySelector('a[download]') === null, '弹框弹出时尚未触发下载');
+
+      // 2. 点击「暂不下载」→ 关闭、恢复滚动且不下载
+      doc.getElementById('btnDlCancel').click();
+      ok(dlModal.classList.contains('hidden'), '点击「暂不下载」关闭弹框');
+      ok(!doc.body.classList.contains('modal-open'), '弹框关闭后背景滚动恢复');
+      ok(doc.querySelector('a[download]') === null, '取消后没有触发下载');
+
+      // 3. 再次打开，点击「下载文件」→ 转圈提示 → 完成下载并关闭
+      e.showDownloadConfirm({ name: '名单_二维码.xlsx', blob: blob, count: 6, skipped: 1 });
+      doc.getElementById('btnDlOk').click();
+      ok(!dlModal.classList.contains('hidden'), '点击「下载文件」后弹框仍打开（等待保存完成）');
+      ok(!doc.getElementById('dlLoading').classList.contains('hidden'), '保存中转圈提示可见');
+      ok(doc.getElementById('btnDlOk').disabled === true, '保存中「下载文件」按钮禁用');
+      ok(doc.getElementById('btnDlCancel').disabled === true, '保存中「暂不下载」按钮禁用');
+      setTimeout(function () {
+        var a = doc.querySelector('a[download]');
+        ok(!!a, '下载链接被创建');
+        ok(a && a.getAttribute('download') === '名单_二维码.xlsx', '下载文件名正确');
+        ok(dlClicks === 1, '下载链接被点击一次');
+        ok(doc.getElementById('dlLoading').classList.contains('hidden'), '保存完成后转圈隐藏');
+        ok(dlModal.classList.contains('hidden'), '确认下载后弹框关闭');
+        ok(!doc.body.classList.contains('modal-open'), '下载完成后背景滚动恢复');
+
+        // 4. Esc 关闭视为取消下载
+        e.showDownloadConfirm({ name: '名单_二维码.xlsx', blob: blob, count: 6, skipped: 1 });
+        doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        ok(dlModal.classList.contains('hidden'), '按 Esc 取消下载并关闭弹框');
+
+        finish();
+      }, 900);
+    } catch (err) {
+      lines.push('FATAL ' + (err && err.message ? err.message : err));
+      failed = true;
+      finish();
+    }
+  }
+</script>
+</body>
+</html>

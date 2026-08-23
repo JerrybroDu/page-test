@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>响应式适配测试</title>
+</head>
+<body>
+<pre id="result">pending</pre>
+<iframe id="app" src="../index.html" style="width:375px;height:700px;border:1px solid #ccc"></iframe>
+<script>
+  var lines = [], failed = false;
+  function ok(c, m) { lines.push((c ? 'PASS ' : 'FAIL ') + m); if (!c) failed = true; }
+  function finish() {
+    document.title = failed ? 'FAIL' : 'PASS';
+    document.getElementById('result').textContent = 'TITLE=' + (failed ? 'FAIL' : 'PASS') + '\n' + lines.join('\n');
+  }
+  var frame = document.getElementById('app');
+  var started = false;
+  function start() { if (started) return; started = true; setTimeout(run, 600); }
+  frame.addEventListener('load', start);
+  setTimeout(start, 8000); // 兜底
+
+  // 打开主题面板并断言其矩形完全落在 iframe 视口内
+  function openPanelCheck(win, doc, tag) {
+    var btn = doc.getElementById('btnTheme');
+    var panel = doc.getElementById('themePanel');
+    btn.click(); // 打开
+    var r = panel.getBoundingClientRect();
+    var vw = win.innerWidth, vh = win.innerHeight;
+    ok(r.left >= 0 && r.right <= vw,
+      tag + '：面板不超出左右边界（left=' + Math.round(r.left) + ', right=' + Math.round(r.right) + ', vw=' + vw + '）');
+    ok(r.top >= 0 && r.bottom <= vh,
+      tag + '：面板不超出上下边界（top=' + Math.round(r.top) + ', bottom=' + Math.round(r.bottom) + ', vh=' + vh + '）');
+    ok(r.width >= 120, tag + '：面板宽度正常（' + Math.round(r.width) + 'px）');
+    ok(!panel.classList.contains('hidden'), tag + '：面板处于展开状态');
+    btn.click(); // 收起
+    ok(panel.classList.contains('hidden'), tag + '：再次点击收起');
+  }
+
+  function run() {
+    var win = frame.contentWindow, doc = win.document;
+    try {
+      // ── 手机端（iframe 375px） ──
+      openPanelCheck(win, doc, '手机端 375px');
+
+      // 预览表在手机宽度下无横向滚动、超长内容省略号
+      var long = new Array(60).join('非常长的内容');
+      var tbody = doc.getElementById('previewBody');
+      tbody.innerHTML = '<tr><td class="col-row">2</td>' +
+        '<td><span class="cell-elide" title="x">' + long + '</span></td>' +
+        '<td class="col-qr"></td></tr>';
+      var wrap = doc.querySelector('.table-wrap');
+      ok(wrap.scrollWidth <= wrap.clientWidth + 1,
+        '手机端：预览表无横向滚动（scrollWidth=' + wrap.scrollWidth + ', clientWidth=' + wrap.clientWidth + '）');
+      var span = tbody.querySelector('.cell-elide');
+      ok(span.scrollWidth > span.clientWidth && getComputedStyle(span).textOverflow === 'ellipsis',
+        '手机端：超长内容以 … 截断');
+
+      // 头部右侧操作区换行后仍应保持在屏幕内
+      var actions = doc.querySelector('.header-actions');
+      var ar = actions.getBoundingClientRect();
+      ok(ar.left >= 0 && ar.right <= win.innerWidth + 1,
+        '手机端：header 右侧操作区在屏幕内（left=' + Math.round(ar.left) + ', right=' + Math.round(ar.right) + '）');
+
+      // 副标题在手机窄屏下隐藏（头部更紧凑）
+      var sub = doc.querySelector('.brand .subtitle');
+      ok(!sub || getComputedStyle(sub).display === 'none', '手机端：副标题已隐藏');
+
+      // ── 平板宽度 ──
+      frame.style.width = '820px';
+      setTimeout(function () {
+        openPanelCheck(win, doc, '平板 820px');
+        // ── 桌面宽度 ──
+        frame.style.width = '1200px';
+        setTimeout(function () {
+          openPanelCheck(win, doc, '桌面 1200px');
+          finish();
+        }, 300);
+      }, 300);
+    } catch (e) { lines.push('FATAL ' + (e && e.message ? e.message : e)); failed = true; finish(); }
+  }
+</script>
+</body>
+</html>

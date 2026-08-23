@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>DOM 冒烟测试</title>
+</head>
+<body>
+<pre id="result">pending</pre>
+<iframe id="app" src="../index.html" style="display:none"></iframe>
+<script>
+  // 在真实浏览器环境中加载完整应用页，再通过 iframe.contentWindow 调用核心逻辑
+  var lines = [];
+  var failed = false;
+  function ok(cond, msg) { lines.push((cond ? 'PASS ' : 'FAIL ') + msg); if (!cond) failed = true; }
+
+  function finish() {
+    document.title = failed ? 'FAIL' : 'PASS';
+    document.getElementById('result').textContent = 'TITLE=' + (failed ? 'FAIL' : 'PASS') + '\n' + lines.join('\n');
+  }
+
+  var appFrame = document.getElementById('app');
+  appFrame.addEventListener('load', function () {
+    setTimeout(runTests, 1200);
+  });
+  setTimeout(runTests, 6000); // 兜底：iframe 加载异常也尝试运行
+
+  async function runTests() {
+      var appWin = document.getElementById('app').contentWindow;
+      var e = appWin.__qrExports;
+      if (!e) { lines.push('FATAL app.js 未加载（__qrExports 缺失）'); finish(); return; }
+
+      try {
+        // 1. makeQR 在 canvas 上渲染（中文 + 数字）
+        var cv = e.makeQR('测试中文ABC123', 128, 'M', 4);
+        ok(cv && cv.width === cv.height && cv.width > 0, 'makeQR 输出正方形 canvas（' + cv.width + 'px）');
+        var ctx = cv.getContext('2d');
+        var corner = ctx.getImageData(0, 0, 1, 1).data; // 左上角应为白色静区
+        ok(corner[3] === 255 && corner[0] === 255, '左上角为白色静区');
+
+        // 2. 纠错级别 H 也能渲染
+        var cvH = e.makeQR('级别H', 96, 'H', 6);
+        ok(cvH && cvH.width > 0, '纠错级别 H + 留白 6 渲染成功');
+
+        // 3. valueToText 规整（整数去小数尾、日期、公式、错误值）
+        ok(e.valueToText(13800138000) === '13800138000', '整数去掉小数尾巴');
+        ok(e.valueToText(3.14) === '3.14', '浮点保留');
+        ok(e.valueToText({ result: 'ok' }) === 'ok', '公式取结果');
+        ok(e.valueToText({ error: '#DIV/0!' }) === '#DIV/0!', '错误值');
+        ok(e.valueToText(new Date(2024, 0, 5, 12, 30, 0)) === '2024-01-05 12:30:00', '日期格式化为 YYYY-MM-DD HH:MM:SS');
+
+        // 4. 长度检查（超长内容 → 含行号的友好报错）
+        var tooLong = new Array(800).join('汉'); // 2400 汉字 > M 级上限
+        var threw = false;
+        try { e.checkContentLength(tooLong, 'M', 3); }
+        catch (err) { threw = /第 3 行/.test(err.message) && /最大容量/.test(err.message); }
+        ok(threw, '超长内容给出含行号的友好报错');
+
+        // 5. UTF-8 字节数
+        ok(e.byteLength('中A') === 4, 'UTF-8 字节数正确（中A = 4）');
+
+        // 6. 输出文件名（追加 _二维码_年月日）
+        ok(/^名单_二维码_\d{8}\.xlsx$/.test(e.outputName('名单.xlsx')),
+          '输出文件名追加 _二维码_年月日（' + e.outputName('名单.xlsx') + '）');
+
+        // 7. canvas → PNG 字节 → ExcelJS 嵌入图片 → 写出
+        var bytes = e.canvasToPngBytes(cv);
+        ok(Object.prototype.toString.call(bytes).indexOf('Uint8Array') !== -1 && bytes.length > 50, 'canvas 转 PNG 字节（' + bytes.length + 'B）');
+        var wb = new appWin.ExcelJS.Workbook();
+        var ws = wb.addWorksheet('T');
+        var id = wb.addImage({ buffer: bytes, extension: 'png' });
+        ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: cv.width, height: cv.height } });
+        var buf = await wb.xlsx.writeBuffer();
+        ok(buf && buf.byteLength > 0, '含图片的工作簿可写（' + buf.byteLength + 'B）');
+      } catch (err) {
+        lines.push('FATAL ' + (err && err.message ? err.message : err));
+        failed = true;
+      }
+      finish();
+  }
+</script>
+</body>
+</html>
