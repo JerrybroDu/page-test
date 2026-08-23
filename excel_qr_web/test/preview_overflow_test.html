@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>预览溢出测试</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<div class="table-wrap" id="wrap" style="max-width:500px; max-height:none;">
+  <table class="preview-table">
+    <thead><tr><th>行</th><th>内容（将生成二维码）</th><th>二维码</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="col-row">2</td>
+        <td><span class="cell-elide" title="https://example.com/very/long/url/that/would/overflow/the/preview/table/and/cause/a/horizontal/scrollbar/if/not/truncated/0123456789abcdef">https://example.com/very/long/url/that/would/overflow/the/preview/table/and/cause/a/horizontal/scrollbar/if/not/truncated/0123456789abcdef</span></td>
+        <td class="col-qr"></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<pre id="result">pending</pre>
+<script>
+  function check() {
+    var wrap = document.getElementById('wrap');
+    var span = document.querySelector('.cell-elide');
+    var noHScroll = wrap.scrollWidth <= wrap.clientWidth;
+    var ellipsis = getComputedStyle(span).textOverflow === 'ellipsis'
+      && getComputedStyle(span).display.indexOf('inline-block') !== -1
+      && span.scrollWidth > span.clientWidth; // 文本确实被截断
+    var pass = noHScroll && ellipsis;
+    document.getElementById('result').textContent =
+      'TITLE=' + (pass ? 'PASS' : 'FAIL') +
+      '\nnoHScroll=' + noHScroll + ' (scrollWidth=' + wrap.scrollWidth + ', clientWidth=' + wrap.clientWidth + ')' +
+      '\nellipsis active=' + ellipsis +
+      '\nspan scrollWidth=' + span.scrollWidth + ', clientWidth=' + span.clientWidth +
+      '\ntextOverflow=' + getComputedStyle(span).textOverflow + ', display=' + getComputedStyle(span).display;
+    document.title = pass ? 'PASS' : 'FAIL';
+  }
+  window.addEventListener('load', function () { setTimeout(check, 500); });
+  setTimeout(check, 3000); // 兜底
+</script>
+</body>
+</html>

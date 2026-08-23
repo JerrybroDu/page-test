@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Excel 二维码批量生成器（网页版）—— 选择 Excel 文件 → 设置参数 → 一键把指定列文本生成二维码并新增一列插入，另存为新文件。所有处理都在本地浏览器完成，文件不会上传。">
+<title>二维码批量生成器 · 网页版</title>
+<link rel="icon" type="image/png" href="logo/favicon.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-header-inner">
+    <div class="brand">
+      <img src="logo/favicon.png" alt="logo" class="brand-logo">
+      <div>
+        <h1>二维码批量生成器 <span class="badge">网页版</span></h1>
+        <p class="subtitle">选择 Excel 文件 → 设置参数 → 一键把指定列文本生成二维码并新增一列插入，另存为新文件（原文件不受影响）</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="theme-wrap">
+        <button type="button" class="btn btn-ghost theme-btn" id="btnTheme" title="切换主题配色" aria-label="切换主题配色" aria-expanded="false">
+          <svg class="theme-icon" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
+            <path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 0-4H12a2 2 0 0 1 0-4h7a2 2 0 0 0 2-2A9 9 0 0 0 12 3z"
+                  fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="7.4" cy="11" r="1.15" fill="var(--primary)"/>
+            <circle cx="12" cy="7.6" r="1.15" fill="var(--primary)"/>
+            <circle cx="16.6" cy="11" r="1.15" fill="var(--primary)"/>
+          </svg>
+        </button>
+        <div class="theme-panel hidden" id="themePanel" role="menu" aria-label="主题配色">
+          <div class="theme-item" data-theme="green" data-color="#07c160"><span class="swatch" style="background:#07c160"></span>微信绿</div>
+          <div class="theme-item" data-theme="blue" data-color="#33a5e8"><span class="swatch" style="background:#33a5e8"></span>清爽蓝</div>
+          <div class="theme-item" data-theme="orange" data-color="#f59b18"><span class="swatch" style="background:#f59b18"></span>活力橙</div>
+          <div class="theme-item" data-theme="purple" data-color="#a26ff7"><span class="swatch" style="background:#a26ff7"></span>科技紫</div>
+          <div class="theme-item" data-theme="teal" data-color="#17b8a6"><span class="swatch" style="background:#17b8a6"></span>翡翠青</div>
+        </div>
+      </div>
+      <button type="button" class="btn btn-ghost" id="btnCustomTop" title="输入任意内容生成二维码并下载为图片">自定义二维码</button>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- ═══ 1. 选择 Excel 文件 ═══ -->
+  <section class="card">
+    <h2 class="card-title"><span class="step-num">1</span> 选择 Excel 文件</h2>
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="选择 Excel 文件">
+      <div class="dz-icon" aria-hidden="true">📄</div>
+      <p class="dz-main">将 Excel 文件拖拽到此处，或 <span class="dz-link">点击选择文件</span></p>
+      <p class="dz-hint">支持 .xlsx / .xlsm / .xls，最大 50MB</p>
+      <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" hidden>
+    </div>
+    <div class="file-info hidden" id="fileInfo">
+      <span class="file-icon">✅</span>
+      <div class="file-meta">
+        <div class="file-name" id="fileName"></div>
+        <div class="file-detail" id="fileDetail"></div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="btnReselect">重新选择</button>
+    </div>
+  </section>
+
+  <!-- ═══ 2. 参数设置 ═══ -->
+  <section class="card">
+    <h2 class="card-title"><span class="step-num">2</span> 参数设置</h2>
+
+    <div class="params-grid">
+      <div class="param">
+        <label class="param-label" for="selSheet">
+          工作表
+          <span class="help" data-tip="选择要处理的工作表。Excel 中的所有工作表都会自动列在这里。">ⓘ</span>
+        </label>
+        <select id="selSheet" class="input" disabled></select>
+      </div>
+
+      <div class="param">
+        <span class="param-label">首行是否表头
+          <span class="help" data-tip="选「是」：跳过首行，表头不会被生成二维码。&#10;选「否」：从首行开始读取。">ⓘ</span>
+        </span>
+        <div class="radio-row" id="radioHeader">
+          <label class="radio"><input type="radio" name="header" value="1" checked><span>是，跳过首行</span></label>
+          <label class="radio"><input type="radio" name="header" value="0"><span>否，从首行开始</span></label>
+        </div>
+      </div>
+
+      <div class="param">
+        <label class="param-label" for="selCol">
+          二维码内容列
+          <span class="help" data-tip="生成二维码的文字来源列。&#10;有表头时显示“第N列（表头名）”，无表头时显示“第N列”。">ⓘ</span>
+        </label>
+        <select id="selCol" class="input" disabled></select>
+      </div>
+
+      <div class="param">
+        <span class="param-label">二维码大小
+          <span class="help" data-tip="只影响二维码在表格里的显示大小，二维码内容不变。">ⓘ</span>
+        </span>
+        <div class="radio-row" id="radioSize">
+          <label class="radio"><input type="radio" name="size" value="96"><span>小</span></label>
+          <label class="radio"><input type="radio" name="size" value="128" checked><span>中</span></label>
+          <label class="radio"><input type="radio" name="size" value="192"><span>大</span></label>
+        </div>
+      </div>
+
+      <div class="param">
+        <span class="param-label">自动调整
+          <span class="help" data-tip="自动拉高行、加宽列，保证二维码完整显示。">ⓘ</span>
+        </span>
+        <label class="checkbox"><input type="checkbox" id="chkFit" checked><span>调整行高与列宽（推荐）</span></label>
+      </div>
+
+      <div class="param">
+        <span class="param-label">其他参数
+          <span class="help" data-tip="自定义边长、纠错级别、四周留白、起始行等参数。">ⓘ</span>
+        </span>
+        <button type="button" class="btn btn-outline" id="btnAdvanced">高级设置</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 3. 数据预览 ═══ -->
+  <section class="card">
+    <div class="card-head">
+      <h2 class="card-title"><span class="step-num">3</span> 数据预览</h2>
+      <span class="preview-hint" id="previewHint"></span>
+    </div>
+    <div class="table-wrap">
+      <table class="preview-table" id="previewTable">
+        <thead><tr>
+          <th class="col-row">行号</th>
+          <th>内容（将生成二维码）</th>
+          <th class="col-qr">二维码预览</th>
+        </tr></thead>
+        <tbody id="previewBody">
+          <tr><td colspan="3" class="empty-tip">请先选择 Excel 文件</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══ 4. 生成 ═══ -->
+  <section class="card">
+    <div class="gen-row">
+      <button type="button" class="btn btn-primary btn-lg" id="btnGenerate" disabled>开始生成</button>
+      <div class="progress-wrap">
+        <div class="progress-bar" id="progressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+        <span class="progress-text" id="progressText">就绪</span>
+      </div>
+    </div>
+
+    <h3 class="log-title">运行日志</h3>
+    <div class="log" id="log" aria-live="polite">
+      <div class="log-empty">—</div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="app-footer">
+  <p>完全在本地浏览器中运行，文件不会上传到任何服务器</p>
+</footer>
+
+<!-- ═══ 高级设置对话框 ═══ -->
+<div class="modal-mask hidden" id="advModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="advTitle">
+    <div class="modal-head">
+      <h3 id="advTitle">高级设置</h3>
+      <button type="button" class="modal-close" data-close="advModal" aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="adv-row">
+        <label class="checkbox"><input type="checkbox" id="chkCustomSize"><span>自定义二维码边长（像素）：</span></label>
+        <input type="number" id="inpCustomSize" class="input input-sm" min="32" max="1000" step="10" value="128" disabled>
+        <span class="adv-hint">覆盖上面“小/中/大”的选择</span>
+      </div>
+      <div class="adv-row">
+        <label class="adv-label" for="selLevel">纠错级别（容错能力）：</label>
+        <select id="selLevel" class="input input-sm">
+          <option value="L">低</option>
+          <option value="M" selected>标准</option>
+          <option value="Q">高</option>
+          <option value="H">最高</option>
+        </select>
+        <span class="adv-hint">级别越高越耐污损、图案越密；一般用标准即可</span>
+      </div>
+      <div class="adv-row">
+        <label class="adv-label" for="selBorder">四周白色留白：</label>
+        <select id="selBorder" class="input input-sm">
+          <option value="2">紧凑</option>
+          <option value="4" selected>标准</option>
+          <option value="6">宽松</option>
+        </select>
+        <span class="adv-hint">留白大一些更易扫描（标准即二维码规范要求）</span>
+      </div>
+      <div class="adv-row">
+        <label class="checkbox"><input type="checkbox" id="chkCustomStart"><span>自定义起始行：</span></label>
+        <input type="number" id="inpCustomStart" class="input input-sm" min="1" max="100000" value="2" disabled>
+        <span class="adv-hint">表头占多行等特殊情况时使用</span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-primary" data-close="advModal">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 自定义二维码对话框 ═══ -->
+<div class="modal-mask hidden" id="qrModal">
+  <div class="modal modal-qr" role="dialog" aria-modal="true" aria-labelledby="qrTitle">
+    <div class="modal-head">
+      <h3 id="qrTitle">自定义二维码</h3>
+      <button type="button" class="modal-close" data-close="qrModal" aria-label="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="adv-label" for="txtQrContent">二维码内容：</label>
+      <textarea id="txtQrContent" class="input" rows="5" placeholder="输入任意内容，下方实时预览二维码…"></textarea>
+      <div class="qr-preview">
+        <canvas id="qrPreviewCanvas" width="240" height="240"></canvas>
+        <p class="preview-empty" id="qrPreviewEmpty">输入内容后自动生成预览</p>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-primary" id="btnDownloadQr" disabled>下载二维码</button>
+      <button type="button" class="btn btn-ghost" data-close="qrModal">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 提示气泡 ═══ -->
+<div class="tooltip hidden" id="tooltip"></div>
+
+<script src="lib/qrcode.min.js"></script>
+<script src="lib/exceljs.min.js"></script>
+<script src="lib/xlsx.full.min.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
